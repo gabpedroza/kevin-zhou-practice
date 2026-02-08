@@ -252,10 +252,20 @@ document.addEventListener('DOMContentLoaded', () => {
         appState.currentSession = [];
         const hist = new Set(appState.progress.history);
         selected.forEach(t => {
-            const available = appState.allQuestionsData[t.handout].topics[t.name].filter(q => !hist.has(`${t.handout}::${t.name}::${q.number}`));
-            if (available.length) {
-                const q = available[Math.floor(Math.random() * available.length)];
-                appState.currentSession.push({ question: { ...q, handout: t.handout, topic: t.name, id: `${t.handout}::${t.name}::${q.number}` }, mainTopicId: t.id, isDone: false });
+            const allInTopic = appState.allQuestionsData[t.handout].topics[t.name];
+            const available = allInTopic.filter(q => !hist.has(`${t.handout}::${t.name}::${q.number}`));
+            
+            // Pick an unsolved one if possible, otherwise pick any from the topic for review
+            const q = available.length > 0 
+                ? available[Math.floor(Math.random() * available.length)]
+                : allInTopic[Math.floor(Math.random() * allInTopic.length)];
+
+            if (q) {
+                appState.currentSession.push({ 
+                    question: { ...q, handout: t.handout, topic: t.name, id: `${t.handout}::${t.name}::${q.number}` }, 
+                    mainTopicId: t.id, 
+                    isDone: false 
+                });
             }
         });
         if (!appState.currentSession.length) return alert("No new problems!");
@@ -306,10 +316,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleRating(item, r) {
         const now = new Date(); item.isDone = true;
-        if (!appState.progress.history.includes(item.question.id)) {
+        
+        // Only award points and mark as "solved" if they passed (rating > 1)
+        if (r > 1 && !appState.progress.history.includes(item.question.id)) {
             appState.progress.history.push(item.question.id);
             appState.progress.pointsEarned += item.question.points;
         }
+        
         let t = appState.progress.topics[item.mainTopicId] || { last_review: now.toISOString() };
         let n = !t.stability ? FSRS.calculateInitial(r, item.question.points) : FSRS.calculateReview(t.stability, t.difficulty, r, (now - new Date(t.last_review)) / 86400000);
         Object.assign(t, { state: n.state, stability: n.s, difficulty: n.d, last_review: now.toISOString(), due: new Date(now.getTime() + FSRS.calculateNextInterval(n.s) * 86400000).toISOString() });
