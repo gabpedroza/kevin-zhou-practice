@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         calculateInitial: (rating, points = 0) => {
             const w = FSRS_PARAMS.w;
             let d = w[4] - (rating - 3) * w[5];
-            if (points > 0) d += (points - 3) * 0.1;
+            //if (points > 0) d += (points - 3) * 0.1;
             return { s: w[rating - 1], d: Math.max(1, Math.min(10, d)), state: 2 };
         },
         calculateReview: (prevS, prevD, rating, elapsedDays) => {
