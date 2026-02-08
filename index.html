@@ -6,10 +6,9 @@
     <title>Handouts Practice Selector (FSRS + Points)</title>
     <link rel="stylesheet" href="style.css">
     <style>
-        /* Add dashboard specific styles */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 15px;
             margin-bottom: 20px;
         }
@@ -21,13 +20,14 @@
             border: 1px solid #e0e0e0;
         }
         .stat-value {
-            font-size: 2em;
+            font-size: 1.8em;
             font-weight: bold;
             color: #2c3e50;
         }
         .stat-label {
             color: #7f8c8d;
-            font-size: 0.9em;
+            font-size: 0.85em;
+            font-weight: bold;
         }
         .progress-bar-container {
             width: 100%;
@@ -42,43 +42,70 @@
             background-color: #27ae60;
             transition: width 0.3s ease;
         }
+        
+        /* Granular Dashboard Styles */
+        .category-group {
+            margin-top: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .category-header {
+            background: #f1f4f6;
+            padding: 12px 15px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            user-select: none;
+        }
+        .category-header:hover {
+            background: #e2e8ec;
+        }
+        .category-content {
+            display: none;
+            padding: 0;
+            background: white;
+        }
+        .category-group.open .category-content {
+            display: block;
+        }
+        .handout-row {
+            padding: 10px 15px;
+            border-bottom: 1px solid #f5f5f5;
+            display: grid;
+            grid-template-columns: 2fr 1.5fr 1fr 1fr;
+            align-items: center;
+            font-size: 0.9em;
+        }
+        .handout-row:last-child {
+            border-bottom: none;
+        }
+        .handout-title {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding-right: 10px;
+        }
+        .arrow {
+            transition: transform 0.2s;
+        }
+        .category-group.open .arrow {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Handouts Practice Selector</h1>
 
-        <!-- Dashboard Section -->
-        <div class="card" id="dashboard-section">
-            <h2>Your Progress</h2>
-            <div class="dashboard-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="total-points">0</div>
-                    <div class="stat-label">Total Points Earned</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="problems-solved">0</div>
-                    <div class="stat-label">Problems Solved</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="mastery-score">0%</div>
-                    <div class="stat-label">Estimated Mastery</div>
-                </div>
-            </div>
-            <div>
-                <p><strong>Overall Completion:</strong> <span id="completion-text">0 / 0 Points</span></p>
-                <div class="progress-bar-container">
-                    <div class="progress-bar-fill" id="overall-progress" style="width: 0%"></div>
-                </div>
-            </div>
-        </div>
-
         <!-- GitHub Sync Section -->
         <div class="card" id="github-controls">
             <h2>GitHub Sync</h2>
-            <p>Store your progress in a private GitHub repository to sync across devices.</p>
+            <p>Store progress in a private GitHub repository.</p>
             <div class="form-grid">
-                <label for="github-repo">GitHub Repo (e.g., user/repo):</label>
+                <label for="github-repo">GitHub Repo:</label>
                 <input type="text" id="github-repo" placeholder="username/handouts-practice">
                 
                 <label for="github-pat">Personal Access Token:</label>
@@ -95,9 +122,9 @@
         <!-- Practice Setup Section -->
         <div class="card" id="practice-setup">
             <h2>Start Practice Session</h2>
-            <p>The FSRS algorithm will select the topics that need the most attention, weighting harder (higher point) problems slightly more.</p>
+            <p>FSRS will select due topics, weighting higher-point problems slightly more.</p>
             <div class="form-grid">
-                <label for="num-problems">How many problems do you want to do?</label>
+                <label for="num-problems">Number of problems:</label>
                 <input type="number" id="num-problems" value="3" min="1" max="20">
             </div>
             <button id="start-session-btn" class="primary-btn">Start Session</button>
@@ -106,45 +133,39 @@
         <!-- Active Session Section (Hidden by default) -->
         <div class="card" id="active-session" style="display: none;">
             <h2>Current Session</h2>
-            <p>Select a problem to work on. You can complete them in any order.</p>
-            <div id="session-dashboard" class="session-grid">
-                <!-- Problem cards will be injected here -->
-            </div>
+            <div id="session-dashboard" class="session-grid"></div>
             <button id="finish-early-btn" class="secondary-btn" style="margin-top: 20px;">Finish Session Early</button>
         </div>
 
         <!-- Completion Screen (Hidden by default) -->
         <div class="card" id="session-complete" style="display: none;">
             <h2>Session Complete!</h2>
-            <p>Great job! Don't forget to save your progress to GitHub.</p>
+            <p>Don't forget to save your progress to GitHub.</p>
             <button id="restart-btn">Start New Session</button>
         </div>
 
-        <!-- Info / Algorithm Explanation -->
-        <div class="card" id="info-section">
-            <details>
-                <summary>How it works (FSRS Algorithm + Points)</summary>
-                <div class="details-content">
-                    <p>This application uses a modified <strong>Free Spaced Repetition Scheduler (FSRS)</strong> algorithm.</p>
-                    <ul>
-                        <li><strong>Topics:</strong> The system tracks your mastery of specific topics from the handouts.</li>
-                        <li><strong>Points System:</strong> Each problem has a point value. 
-                            <ul>
-                                <li>Higher point problems start with a slightly higher "Difficulty" rating.</li>
-                                <li>Your dashboard tracks "Points Earned" (sum of points for completed problems).</li>
-                            </ul>
-                        </li>
-                        <li><strong>Ratings:</strong>
-                            <ul>
-                                <li><strong>Again (1):</strong> Complete blackout.</li>
-                                <li><strong>Hard (2):</strong> Solved with significant effort/errors.</li>
-                                <li><strong>Good (3):</strong> Solved correctly with normal effort.</li>
-                                <li><strong>Easy (4):</strong> Solved effortlessly.</li>
-                            </ul>
-                        </li>
-                    </ul>
+        <!-- Dashboard Section -->
+        <div class="card" id="dashboard-section">
+            <h2>Overall Progress</h2>
+            <div class="dashboard-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="total-points">0</div>
+                    <div class="stat-label">Points Earned</div>
                 </div>
-            </details>
+                <div class="stat-card">
+                    <div class="stat-value" id="problems-solved">0</div>
+                    <div class="stat-label">Problems Solved</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="completion-pct">0%</div>
+                    <div class="stat-label">Total Completion</div>
+                </div>
+            </div>
+            
+            <h3>Breakdown by Category</h3>
+            <div id="granular-stats">
+                <!-- Category groups injected here -->
+            </div>
         </div>
     </div>
 
