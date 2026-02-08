@@ -242,11 +242,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = new Date();
         const due = topics.filter(t => !appState.progress.topics[t.id] || new Date(appState.progress.topics[t.id].due) <= now);
         shuffleArray(due);
+        
         let selected = due.slice(0, num);
         if (selected.length < num) {
-            const other = topics.filter(t => !selected.includes(t));
-            shuffleArray(other);
-            selected = selected.concat(other.slice(0, num - selected.length));
+            // Priority 2: Not due yet, but sort by closest due date
+            const notDue = topics.filter(t => !selected.includes(t));
+            notDue.sort((a, b) => {
+                const dateA = new Date(appState.progress.topics[a.id].due);
+                const dateB = new Date(appState.progress.topics[b.id].due);
+                return dateA - dateB;
+            });
+            selected = selected.concat(notDue.slice(0, num - selected.length));
         }
 
         appState.currentSession = [];
