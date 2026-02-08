@@ -126,8 +126,8 @@ document.addEventListener('DOMContentLoaded', () => {
         calculateReview: (prevS, prevD, rating, elapsedDays) => {
             const w = FSRS_PARAMS.w;
             let nextD = Math.max(1, Math.min(10, (w[7] * w[4] + (1 - w[7]) * (prevD - w[6] * (rating - 3)))));
-            if (rating === 1) return { s: w[11] * Math.pow(nextD, -w[12]) * (Math.pow(prevS + 1, w[13]) - 1) * Math.exp(w[14] * (1 - FSRS_PARAMS.request_retention)), d: nextD, state: 3 };
             const retrievability = Math.pow(1 + elapsedDays / (9 * prevS), -1);
+            if (rating === 1) return { s: w[11] * Math.pow(nextD, -w[12]) * (Math.pow(prevS + 1, w[13]) - 1) * Math.exp(w[14] * (1 - retrievability)), d: nextD, state: 3 };
             let factor = (rating === 2 ? w[15] : (rating === 4 ? w[16] : 1));
             const stabilityGrowth = Math.exp(w[8]) * (11 - nextD) * Math.pow(prevS, -w[9]) * (Math.exp(w[10] * (1 - retrievability)) - 1);
             return { s: prevS * (1 + stabilityGrowth * factor), d: nextD, state: 2 };
