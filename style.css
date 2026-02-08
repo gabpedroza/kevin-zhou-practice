@@ -172,7 +172,7 @@ button:disabled {
 
 /* Colored Grade Buttons */
 .rate-btn[data-r="1"] { background-color: #e74c3c; } /* Again - Red */
-.rate-btn[data-r="2"] { background-color: #e67e22; } /* Hard - Orange */
+.rate-btn[data-r="2"] { background-color: #f1c40f; } /* Hard - Yellow */
 .rate-btn[data-r="3"] { background-color: #2ecc71; } /* Good - Green */
 .rate-btn[data-r="4"] { background-color: #3498db; } /* Easy - Blue */
 
