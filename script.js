@@ -1,10 +1,11 @@
 // script.js - Handouts Practice Selector (FSRS + Points + Titles)
 
 document.addEventListener('DOMContentLoaded', () => {
-    const PROGRESS_FILE_PATH = 'handouts_progress.json';
+    const PROGRESS_FILE_NAME = 'handouts_progress.json';
     const DATA_FILE_PATH = 'handouts_data.json';
-    const GITHUB_API_BASE = 'https://api.github.com/repos';
-    
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+    const CLIENT_ID = '855621511902-qmedc33ehce1jp0e15vjr41ua3smhlo7.apps.googleusercontent.com';
+
     const FSRS_PARAMS = {
         w: [0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01, 1.49, 0.14, 0.94, 2.18, 0.05, 0.34, 1.26, 0.29, 2.61],
         request_retention: 0.9,
@@ -32,12 +33,14 @@ document.addEventListener('DOMContentLoaded', () => {
             history: [],
             topics: {},
             pointsEarned: 0
-        }
+        },
+        accessToken: null,
+        tokenClient: null,
+        driveFileId: null
     };
 
     const dom = {
-        repoInput: document.getElementById('github-repo'),
-        patInput: document.getElementById('github-pat'),
+        loginBtn: document.getElementById('login-btn'),
         loadBtn: document.getElementById('load-progress-btn'),
         saveBtn: document.getElementById('save-progress-btn'),
         resetBtn: document.getElementById('reset-progress-btn'),
@@ -59,14 +62,46 @@ document.addEventListener('DOMContentLoaded', () => {
     init();
 
     function init() {
-        loadLocalConfig();
         fetchQuestionData();
         setupEventListeners();
+        initGoogleAuth();
+    }
+
+    function initGoogleAuth() {
+        if (typeof google === 'undefined') {
+            setTimeout(initGoogleAuth, 100);
+            return;
+        }
+        // Token client is initialized on demand if client ID changes
+    }
+
+    function requestToken() {
+        if (CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID_HERE') {
+            updateStatus('Please set your Google Client ID in script.js', true);
+            return;
+        }
+        
+        appState.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (response) => {
+                if (response.error !== undefined) {
+                    updateStatus(`Auth error: ${response.error}`, true);
+                    return;
+                }
+                appState.accessToken = response.access_token;
+                dom.loadBtn.disabled = false;
+                dom.saveBtn.disabled = false;
+                updateStatus('Logged in to Google Drive.', false);
+            },
+        });
+        appState.tokenClient.requestAccessToken();
     }
 
     function setupEventListeners() {
-        dom.loadBtn.addEventListener('click', loadProgressFromGithub);
-        dom.saveBtn.addEventListener('click', saveProgressToGithub);
+        dom.loginBtn.addEventListener('click', requestToken);
+        dom.loadBtn.addEventListener('click', loadProgressFromDrive);
+        dom.saveBtn.addEventListener('click', saveProgressToDrive);
         dom.resetBtn.addEventListener('click', resetAllProgress);
         dom.startSessionBtn.addEventListener('click', startSession);
         dom.finishEarlyBtn.addEventListener('click', finishSession);
@@ -76,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetAllProgress() {
         if (!confirm('Are you sure you want to PERMANENTLY delete all study history?')) return;
         appState.progress = { version: 2, history: [], topics: {}, pointsEarned: 0 };
-        updateStatus('Progress reset locally. Save to GitHub to commit.', false);
+        updateStatus('Progress reset locally. Save to Drive to commit.', false);
         updateDashboard();
         resetSession();
     }
@@ -286,29 +321,94 @@ document.addEventListener('DOMContentLoaded', () => {
     function finishSession() { dom.sessionCard.style.display = 'none'; dom.completionCard.style.display = 'block'; }
     function resetSession() { dom.completionCard.style.display = 'none'; dom.setupCard.style.display = 'block'; }
     function shuffleArray(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } }
-    function loadLocalConfig() { dom.repoInput.value = localStorage.getItem('githubRepo') || ''; dom.patInput.value = localStorage.getItem('githubPat') || ''; }
-    async function githubApiFetch(url, options = {}) {
-        const repo = dom.repoInput.value, pat = dom.patInput.value;
-        if (!repo || !pat) throw new Error('Repo and Token required.');
-        localStorage.setItem('githubRepo', repo); localStorage.setItem('githubPat', pat);
-        const res = await fetch(`${GITHUB_API_BASE}/${repo}${url}`, { ...options, headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github.v3+json', ...options.headers } });
-        if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+
+    async function driveApiFetch(url, options = {}) {
+        if (!appState.accessToken) throw new Error('Not logged in.');
+        const res = await fetch(`https://www.googleapis.com${url}`, {
+            ...options,
+            headers: {
+                'Authorization': `Bearer ${appState.accessToken}`,
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+        if (!res.ok) {
+            if (res.status === 401) {
+                appState.accessToken = null;
+                throw new Error('Session expired. Please login again.');
+            }
+            throw new Error(`Drive API ${res.status}`);
+        }
         return res.json();
     }
-    async function loadProgressFromGithub() {
-        updateStatus('Loading...');
+
+    async function findProgressFile() {
+        const query = encodeURIComponent(`name = '${PROGRESS_FILE_NAME}' and trashed = false`);
+        const data = await driveApiFetch(`/drive/v3/files?q=${query}&fields=files(id,name)`);
+        return data.files.length > 0 ? data.files[0].id : null;
+    }
+
+    async function loadProgressFromDrive() {
+        updateStatus('Searching Drive...');
         try {
-            const data = await githubApiFetch(`/contents/${PROGRESS_FILE_PATH}`);
-            appState.githubFileSha = data.sha;
-            appState.progress = JSON.parse(atob(data.content));
+            const fileId = await findProgressFile();
+            if (!fileId) {
+                updateStatus('No file found. Save to create one.', false);
+                return;
+            }
+            appState.driveFileId = fileId;
+            updateStatus('Downloading...');
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+                headers: { 'Authorization': `Bearer ${appState.accessToken}` }
+            });
+            if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+            appState.progress = await res.json();
             if (appState.progress.pointsEarned === undefined) recalcPoints();
             updateStatus('Loaded.', false); updateDashboard();
-        } catch (e) {
-            if (e.message.includes('404')) {
-                updateStatus('New file.', false); appState.progress = { version: 2, history: [], topics: {}, pointsEarned: 0 }; updateDashboard();
-            } else updateStatus(`Error: ${e.message}`, true);
-        }
+        } catch (e) { updateStatus(`Error: ${e.message}`, true); }
     }
+
+    async function saveProgressToDrive() {
+        updateStatus('Saving...');
+        try {
+            if (!appState.driveFileId) appState.driveFileId = await findProgressFile();
+            
+            const metadata = { name: PROGRESS_FILE_NAME, mimeType: 'application/json' };
+            const content = JSON.stringify(appState.progress, null, 2);
+            
+            let url, method;
+            if (appState.driveFileId) {
+                // Update existing file (creates a new version automatically)
+                url = `https://www.googleapis.com/upload/drive/v3/files/${appState.driveFileId}?uploadType=media`;
+                method = 'PATCH';
+            } else {
+                // Create new file
+                // First create metadata, then upload content. Simple way: multipart.
+                // For simplicity here, we'll do the two-step create or just use multipart.
+                // Let's use a simpler two-step for "very simple adaptation":
+                const createRes = await driveApiFetch('/drive/v3/files', {
+                    method: 'POST',
+                    body: JSON.stringify(metadata)
+                });
+                appState.driveFileId = createRes.id;
+                url = `https://www.googleapis.com/upload/drive/v3/files/${appState.driveFileId}?uploadType=media`;
+                method = 'PATCH';
+            }
+
+            const res = await fetch(url, {
+                method: method,
+                headers: {
+                    'Authorization': `Bearer ${appState.accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: content
+            });
+
+            if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+            updateStatus('Saved to Drive!', false);
+        } catch (e) { updateStatus(`Save failed: ${e.message}`, true); }
+    }
+
     function recalcPoints() {
         if (!appState.allQuestionsData) return;
         let pts = 0; const hSet = new Set(appState.progress.history);
@@ -316,13 +416,6 @@ document.addEventListener('DOMContentLoaded', () => {
             appState.allQuestionsData[h].topics[t].forEach(p => { if (hSet.has(`${h}::${t}::${p.number}`)) pts += p.points; });
         appState.progress.pointsEarned = pts;
     }
-    async function saveProgressToGithub() {
-        updateStatus('Saving...');
-        try {
-            try { const c = await githubApiFetch(`/contents/${PROGRESS_FILE_PATH}`); appState.githubFileSha = c.sha; } catch(e){}
-            const res = await githubApiFetch(`/contents/${PROGRESS_FILE_PATH}`, { method: 'PUT', body: JSON.stringify({ message: `Update - ${new Date().toISOString()}`, content: btoa(JSON.stringify(appState.progress, null, 2)), sha: appState.githubFileSha }) });
-            appState.githubFileSha = res.content.sha; updateStatus('Saved!', false);
-        } catch (e) { updateStatus(`Save failed: ${e.message}`, true); }
-    }
+
     function updateStatus(msg, isErr) { dom.syncStatus.textContent = msg; dom.syncStatus.style.color = isErr ? '#e74c3c' : '#27ae60'; }
 });

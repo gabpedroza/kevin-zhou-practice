@@ -100,20 +100,14 @@
     <div class="container">
         <h1>Handouts Practice Selector</h1>
 
-        <!-- GitHub Sync Section -->
-        <div class="card" id="github-controls">
-            <h2>GitHub Sync</h2>
-            <p>Store progress in a private GitHub repository.</p>
-            <div class="form-grid">
-                <label for="github-repo">GitHub Repo:</label>
-                <input type="text" id="github-repo" placeholder="username/handouts-practice">
-                
-                <label for="github-pat">Personal Access Token:</label>
-                <input type="password" id="github-pat" placeholder="ghp_...">
-            </div>
+        <!-- Google Drive Sync Section -->
+        <div class="card" id="drive-controls">
+            <h2>Google Drive Sync</h2>
+            <p>Store progress in your Google Drive. It handles versioning automatically!</p>
             <div class="button-group">
-                <button id="load-progress-btn">Load Progress</button>
-                <button id="save-progress-btn">Save Progress</button>
+                <button id="login-btn">Login with Google</button>
+                <button id="load-progress-btn" disabled>Load Progress</button>
+                <button id="save-progress-btn" disabled>Save Progress</button>
                 <button id="reset-progress-btn" class="danger-btn">Reset All Progress</button>
             </div>
             <div id="sync-status"></div>
@@ -140,7 +134,7 @@
         <!-- Completion Screen (Hidden by default) -->
         <div class="card" id="session-complete" style="display: none;">
             <h2>Session Complete!</h2>
-            <p>Don't forget to save your progress to GitHub.</p>
+            <p>Don't forget to save your progress to Google Drive.</p>
             <button id="restart-btn">Start New Session</button>
         </div>
 
@@ -169,6 +163,7 @@
         </div>
     </div>
 
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="script.js"></script>
 </body>
 </html>
